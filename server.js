@@ -18,7 +18,7 @@ const IG_API_HOST = process.env.IG_API_HOST || 'https://graph.instagram.com';
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 app.use(
-  express.static(path.join(__dirname, 'public'), {
+express.static(__dirname, {
     maxAge: '1h',
     etag: true
   })
@@ -141,11 +141,11 @@ app.get('/api/instagram/feed', async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(
-    path.join(__dirname, 'public', 'index.html')
+path.join(__dirname, 'index.html')
+res.sendFile(=
   );
 });
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`DJ Holland App läuft auf Port ${PORT}`);
-});
+})
