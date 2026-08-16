@@ -1,26 +1,21 @@
-# DJ Holland App V12
+# DJ Holland App – Clean Build
 
-Diese Version behält die visuelle DJ-Holland-PWA und ergänzt einen serverseitigen Instagram-Live-Feed.
+Sauberer Neuaufbau für Render.
 
-## Bereits umgesetzt
-- `/api/instagram/feed` als sichere Server-Schnittstelle
-- Access Token bleibt ausschließlich in `.env`
-- Social Wall lädt Posts/Reels automatisch
-- Story-Bereich ist optional vorbereitet
-- bestehende Bereiche der DJ-Holland-App bleiben erhalten
+## Render
+- Runtime: Node
+- Region: Frankfurt
+- Build Command: `npm install`
+- Start Command: `npm start`
 
-## Lokal starten
-1. Node.js installieren.
-2. `npm install`
-3. `.env.example` nach `.env` kopieren.
-4. `IG_ACCESS_TOKEN` eintragen. Instagram-ID wird automatisch über `/me` ermittelt; `IG_API_VERSION` ist optional.
-5. `npm start`
-6. `http://localhost:3000` öffnen.
+## Struktur
+- `public/index.html` – App
+- `public/manifest.webmanifest` – PWA Manifest
+- `server.js` – Express Server + Instagram API Proxy
 
-## Sicherheit
-Den Access Token niemals in `public/index.html`, GitHub, Screenshots oder Chat-Nachrichten veröffentlichen.
-Für die Live-Version sollte HTTPS verwendet werden.
-
-## Meta/Webhooks
-Webhooks sind noch nicht aktiviert. Dafür braucht die Meta-App später die öffentliche HTTPS-Callback-URL
-des gehosteten Backends und ein eigenes Verify Token. Diese Werte werden erst nach Wahl des Hostings gesetzt.
+## Instagram
+In Render unter Environment Variables eintragen:
+- `IG_ACCESS_TOKEN`
+- optional `IG_USER_ID`
+- optional `IG_API_VERSION`
+- optional `IG_API_HOST`
