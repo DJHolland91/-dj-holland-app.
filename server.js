@@ -112,9 +112,7 @@ app.get('/api/instagram/feed', async (req,res) => {
 });
 
 app.get('*', (req,res) => {
-  res.sendFile(path.join(__dirname,'public','index.html'));
-});
-
-app.listen(PORT, () => {
+  res.sendFile(path.join(__dirname,'
   console.log(`DJ Holland V12 läuft auf Port ${PORT}`);
 });
+app.listen(PORT, '0.0.0.0', () => {
