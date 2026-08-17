@@ -1,9 +1,26 @@
 {
+  "id": "/",
   "name": "DJ Holland",
   "short_name": "DJ Holland",
+  "description": "DJ Holland – Musik, Instagram, Musikwünsche, Events und Booking.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#050505",
-  "theme_color": "#ff8a00",
-  "description": "DJ Holland – Instagram, Musik, Über mich, Musikwünsche, Fanshop Coming Soon und Booking."
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
