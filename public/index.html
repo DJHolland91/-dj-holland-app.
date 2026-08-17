@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b0b0f">
+
+  <title>DJ Holland</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b0b0f;
+      color: #ffffff;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 32px 20px 20px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #a9a9b3;
+      font-size: 15px;
+    }
+
+    main {
+      width: min(100%, 700px);
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .status {
+      background: #17171f;
+      border: 1px solid #292934;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+      color: #b8b8c4;
+    }
+
+    .status.error {
+      color: #ff8a8a;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .post {
+      background: #17171f;
+      border-radius: 14px;
+      overflow: hidden;
+      min-height: 180px;
+    }
+
+    .post img,
+    .post video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: #22222b;
+    }
+
+    .caption {
+      padding: 10px;
+      font-size: 13px;
+      color: #d4d4dc;
+      line-height: 1.4;
+    }
+
+    .empty {
+      grid-column: 1 / -1;
+      padding: 40px 20px;
+      text-align: center;
+      color: #9999a5;
+    }
+
+    footer {
+      padding: 40px 20px;
+      text-align: center;
+      color: #666674;
+      font-size: 13px;
+    }
+
+    @media (min-width: 600px) {
+      .grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>DJ Holland</h1>
+  <div class="subtitle">Official Feed</div>
+</header>
+
+<main>
+
+  <div id="status" class="status">
+    Instagram wird geladen …
+  </div>
+
+  <div id="feed" class="grid"></div>
+
+</main>
+
+<footer>
+  © DJ Holland
+</footer>
+
+<script>
+  const statusBox = document.getElementById("status");
+  const feed = document.getElementById("feed");
+
+  function escapeHTML(value = "") {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function loadInstagram() {
+    try {
+      const response = await fetch("/api/instagram", {
+        cache: "no-store"
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.ok === false) {
+        throw new Error(
+          data.message ||
+          data.error ||
+          "Instagram konnte nicht geladen werden."
+        );
+      }
+
+      const items = Array.isArray(data.items)
+        ? data.items
+        : Array.isArray(data.media)
+          ? data.media
+          : [];
+
+      statusBox.textContent =
+        data.username
+          ? `@${data.username}`
+          : "Instagram";
+
+      if (!items.length) {
+        feed.innerHTML =
+          '<div class="empty">Noch keine Beiträge verfügbar.</div>';
+        return;
+      }
+
+      feed.innerHTML = items.map(item => {
+        const mediaUrl =
+          item.media_url ||
+          item.thumbnail_url ||
+          item.url ||
+          "";
+
+        const type = String(
+          item.media_type || item.type || ""
+        ).toUpperCase();
+
+        const caption = escapeHTML(item.caption || "");
+
+        const link =
+          item.permalink ||
+          "#";
+
+        let media;
+
+        if (type === "VIDEO") {
+          media = `
+            <video
+              src="${escapeHTML(mediaUrl)}"
+              controls
+              playsinline
+              preload="metadata">
+            </video>
+          `;
+        } else {
+          media = `
+            <img
+              src="${escapeHTML(mediaUrl)}"
+              alt="Instagram Beitrag"
+              loading="lazy">
+          `;
+        }
+
+        return `
+          <article class="post">
+            <a
+              href="${escapeHTML(link)}"
+              target="_blank"
+              rel="noopener noreferrer">
+              ${media}
+            </a>
+
+            ${
+              caption
+                ? `<div class="caption">${caption}</div>`
+                : ""
+            }
+          </article>
+        `;
+      }).join("");
+
+    } catch (error) {
+      console.error(error);
+
+      statusBox.classList.add("error");
+      statusBox.textContent =
+        "Instagram konnte momentan nicht geladen werden.";
+
+      feed.innerHTML =
+        '<div class="empty">Bitte später erneut versuchen.</div>';
+    }
+  }
+
+  loadInstagram();
+</script>
+
+</body>
+</html>
