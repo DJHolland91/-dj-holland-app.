@@ -53,7 +53,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, instagramConfigured: Boolean(IG_ACCESS_TOKEN) });
 });
 
-app.get('/api/instagram/feed', async (_req, res) => {
+app.get('/api/instagram', async (_req, res) => {
   try {
     let userId = IG_USER_ID;
     let username = 'djholland91official';
