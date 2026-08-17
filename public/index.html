@@ -2,10 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b0b0f">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08080d">
 
-  <title>DJ Holland</title>
+  <title>DJ Holland – Official Feed</title>
 
   <style>
     * {
@@ -16,73 +16,160 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0b0b0f;
-      color: #ffffff;
+      background:
+        radial-gradient(circle at top, rgba(255,255,255,.06), transparent 320px),
+        #08080d;
+      color: #fff;
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     header {
-      padding: 32px 20px 20px;
+      padding: 46px 20px 26px;
       text-align: center;
     }
 
     h1 {
-      font-size: 32px;
-      margin-bottom: 8px;
+      font-size: clamp(38px, 10vw, 64px);
+      line-height: 1;
+      letter-spacing: -2px;
+      margin-bottom: 14px;
     }
 
     .subtitle {
-      color: #a9a9b3;
+      color: #9c9ca8;
+      font-size: 17px;
+      margin-bottom: 22px;
+    }
+
+    .profile-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px 16px;
+      border-radius: 999px;
+      border: 1px solid #2a2a36;
+      background: #15151d;
+      color: #cfcfd8;
+      text-decoration: none;
       font-size: 15px;
     }
 
     main {
-      width: min(100%, 700px);
+      width: min(100% - 20px, 900px);
       margin: 0 auto;
-      padding: 20px;
     }
 
     .status {
-      background: #17171f;
-      border: 1px solid #292934;
-      border-radius: 16px;
-      padding: 16px;
-      margin-bottom: 20px;
+      background: #15151d;
+      border: 1px solid #2a2a36;
+      border-radius: 18px;
+      padding: 15px;
+      margin-bottom: 18px;
       text-align: center;
-      color: #b8b8c4;
+      color: #aaaab5;
     }
 
     .status.error {
-      color: #ff8a8a;
+      color: #ff8c92;
     }
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
     }
 
     .post {
-      background: #17171f;
-      border-radius: 14px;
+      background: #15151d;
+      border: 1px solid #272732;
+      border-radius: 18px;
       overflow: hidden;
-      min-height: 180px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.2);
     }
 
-    .post img,
-    .post video {
+    .media-link {
+      display: block;
+      position: relative;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      background: #202029;
+    }
+
+    .post img {
       display: block;
       width: 100%;
-      aspect-ratio: 1 / 1;
+      height: 100%;
       object-fit: cover;
-      background: #22222b;
+    }
+
+    .video-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,.65);
+      border: 1px solid rgba(255,255,255,.18);
+      font-size: 14px;
+    }
+
+    .post-body {
+      padding: 12px;
     }
 
     .caption {
-      padding: 10px;
+      color: #dedee5;
+      font-size: 14px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
+      overflow: hidden;
+    }
+
+    .caption.expanded {
+      display: block;
+      overflow: visible;
+    }
+
+    .caption a {
+      color: #fff;
+      text-decoration: underline;
+    }
+
+    .post-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #292934;
+    }
+
+    .more-btn {
+      border: 0;
+      background: none;
+      color: #9f9faa;
+      font: inherit;
       font-size: 13px;
-      color: #d4d4dc;
-      line-height: 1.4;
+      padding: 2px 0;
+    }
+
+    .insta-btn {
+      color: #fff;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      margin-left: auto;
+      white-space: nowrap;
     }
 
     .empty {
@@ -90,18 +177,27 @@
       padding: 40px 20px;
       text-align: center;
       color: #9999a5;
+      background: #15151d;
+      border-radius: 18px;
+      border: 1px solid #292934;
     }
 
     footer {
-      padding: 40px 20px;
+      padding: 42px 20px;
       text-align: center;
       color: #666674;
       font-size: 13px;
     }
 
-    @media (min-width: 600px) {
+    @media (min-width: 700px) {
       .grid {
         grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 360px) {
+      .grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -112,6 +208,16 @@
 <header>
   <h1>DJ Holland</h1>
   <div class="subtitle">Official Feed</div>
+
+  <a
+    id="profileLink"
+    class="profile-link"
+    href="https://www.instagram.com/djholland91official/"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    @djholland91official
+  </a>
 </header>
 
 <main>
@@ -131,6 +237,7 @@
 <script>
   const statusBox = document.getElementById("status");
   const feed = document.getElementById("feed");
+  const profileLink = document.getElementById("profileLink");
 
   function escapeHTML(value = "") {
     return String(value)
@@ -139,6 +246,22 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function linkify(value = "") {
+    const safe = escapeHTML(value);
+
+    return safe.replace(
+      /(https?:\/\/[^\s<]+)/gi,
+      url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    );
+  }
+
+  function getItems(data) {
+    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.media)) return data.media;
+    if (Array.isArray(data.data)) return data.data;
+    return [];
   }
 
   async function loadInstagram() {
@@ -157,16 +280,17 @@
         );
       }
 
-      const items = Array.isArray(data.items)
-        ? data.items
-        : Array.isArray(data.media)
-          ? data.media
-          : [];
+      const items = getItems(data);
 
-      statusBox.textContent =
-        data.username
-          ? `@${data.username}`
-          : "Instagram";
+      const username =
+        data.username ||
+        "djholland91official";
+
+      profileLink.textContent = `@${username}`;
+      profileLink.href =
+        `https://www.instagram.com/${encodeURIComponent(username)}/`;
+
+      statusBox.remove();
 
       if (!items.length) {
         feed.innerHTML =
@@ -174,60 +298,101 @@
         return;
       }
 
-      feed.innerHTML = items.map(item => {
+      feed.innerHTML = items.map((item, index) => {
+        const type = String(
+          item.media_type ||
+          item.mediaType ||
+          item.type ||
+          ""
+        ).toUpperCase();
+
+        const isVideo = type === "VIDEO";
+
         const mediaUrl =
-          item.media_url ||
           item.thumbnail_url ||
+          item.thumbnailUrl ||
+          item.media_url ||
+          item.mediaUrl ||
           item.url ||
           "";
 
-        const type = String(
-          item.media_type || item.type || ""
-        ).toUpperCase();
-
-        const caption = escapeHTML(item.caption || "");
+        const caption =
+          item.caption || "";
 
         const link =
           item.permalink ||
+          item.link ||
           "#";
-
-        let media;
-
-        if (type === "VIDEO") {
-          media = `
-            <video
-              src="${escapeHTML(mediaUrl)}"
-              controls
-              playsinline
-              preload="metadata">
-            </video>
-          `;
-        } else {
-          media = `
-            <img
-              src="${escapeHTML(mediaUrl)}"
-              alt="Instagram Beitrag"
-              loading="lazy">
-          `;
-        }
 
         return `
           <article class="post">
+
             <a
+              class="media-link"
               href="${escapeHTML(link)}"
               target="_blank"
-              rel="noopener noreferrer">
-              ${media}
+              rel="noopener noreferrer"
+            >
+              <img
+                src="${escapeHTML(mediaUrl)}"
+                alt="Instagram Beitrag"
+                loading="${index < 2 ? "eager" : "lazy"}"
+              >
+
+              ${
+                isVideo
+                  ? '<span class="video-badge">▶</span>'
+                  : ""
+              }
             </a>
 
-            ${
-              caption
-                ? `<div class="caption">${caption}</div>`
-                : ""
-            }
+            <div class="post-body">
+
+              ${
+                caption
+                  ? `<div class="caption">${linkify(caption)}</div>`
+                  : ""
+              }
+
+              <div class="post-actions">
+
+                ${
+                  caption.length > 160
+                    ? '<button class="more-btn" type="button">Mehr anzeigen</button>'
+                    : '<span></span>'
+                }
+
+                <a
+                  class="insta-btn"
+                  href="${escapeHTML(link)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Instagram ↗
+                </a>
+
+              </div>
+
+            </div>
+
           </article>
         `;
       }).join("");
+
+      document.querySelectorAll(".more-btn").forEach(button => {
+        button.addEventListener("click", () => {
+          const caption =
+            button.closest(".post").querySelector(".caption");
+
+          const expanded =
+            caption.classList.toggle("expanded");
+
+          button.textContent =
+            expanded
+              ? "Weniger anzeigen"
+              : "Mehr anzeigen";
+        });
+      });
 
     } catch (error) {
       console.error(error);
