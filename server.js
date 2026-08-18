@@ -524,16 +524,15 @@ app.get('/api/music-cover', async (req, res) => {
   const key = `${title}|${artist}`.toLowerCase();
   if (musicCoverCache.has(key)) return res.json(musicCoverCache.get(key));
   const norm = v => String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
-  const wantTitle = norm(title), wantTitleBase = norm(title.replace(/\s*-\s*Radio Edit\s*$/i, '')), wantArtist = norm(artist);
+  const wantTitle = norm(title), wantArtist = norm(artist);
   let cover='', hitTitle=title, hitArtist=artist;
   try {
-    const baseTitle = title.replace(/[`´]/g, "'").replace(/\s*-\s*Radio Edit\s*$/i, '').trim();
-    const terms = [`${title} ${artist}`, `${baseTitle} ${artist}`, `${baseTitle} DJ Holland`, `${title} DJ Holland`, title, baseTitle];
+    const terms = [`${title} ${artist}`, `${title} DJ Holland`, title];
     for (const term of terms) {
       const url = new URL('https://itunes.apple.com/search');
       url.searchParams.set('term', term); url.searchParams.set('entity','song'); url.searchParams.set('limit','20'); url.searchParams.set('country','DE');
       const r = await fetch(url, {headers:{Accept:'application/json'}}); const d = await r.json();
-      const scored=(Array.isArray(d.results)?d.results:[]).map(x=>{const tt=norm(x.trackName),aa=norm(x.artistName);let score=0;if(tt===wantTitle)score+=15;else if(tt===wantTitleBase)score+=13;else if(tt.includes(wantTitleBase)||wantTitleBase.includes(tt)||tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
+      const scored=(Array.isArray(d.results)?d.results:[]).map(x=>{const tt=norm(x.trackName),aa=norm(x.artistName);let score=0;if(tt===wantTitle)score+=15;else if(tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
       const hit=scored[0]; if(hit?.score>=8 && hit.x?.artworkUrl100){cover=hit.x.artworkUrl100.replace(/100x100bb/,'600x600bb');hitTitle=hit.x.trackName||title;hitArtist=hit.x.artistName||artist;break;}
     }
   } catch {}
@@ -542,7 +541,7 @@ app.get('/api/music-cover', async (req, res) => {
       const q=encodeURIComponent(`${title} ${artist}`);
       const r=await fetch(`https://api.deezer.com/search?q=${q}&limit=15`,{headers:{Accept:'application/json'}}); const d=await r.json();
       const rows=Array.isArray(d.data)?d.data:[];
-      const scored=rows.map(x=>{const tt=norm(x.title),aa=norm(x.artist?.name);let score=0;if(tt===wantTitle)score+=15;else if(tt===wantTitleBase)score+=13;else if(tt.includes(wantTitleBase)||wantTitleBase.includes(tt)||tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
+      const scored=rows.map(x=>{const tt=norm(x.title),aa=norm(x.artist?.name);let score=0;if(tt===wantTitle)score+=15;else if(tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
       const hit=scored[0]; if(hit?.score>=7){cover=hit.x.album?.cover_xl||hit.x.album?.cover_big||'';hitTitle=hit.x.title||title;hitArtist=hit.x.artist?.name||artist;}
     } catch {}
   }
@@ -568,6 +567,6 @@ app.get('*', (req, res) => {
 
 await loadState();
 app.listen(PORT, () => {
-  console.log(`DJ Holland V20.3 läuft auf Port ${PORT}`);
+  console.log(`DJ Holland V20.2 läuft auf Port ${PORT}`);
   console.log(`Mail transport: ${BREVO_API_KEY && MAIL_FROM_EMAIL ? 'Brevo HTTPS' : (SMTP_HOST ? 'SMTP fallback' : 'not configured')}`);
 });
