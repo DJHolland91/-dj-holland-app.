@@ -32,7 +32,7 @@ const BOOKING_TO = process.env.BOOKING_TO || 'dj.team-holland@web.de';
 // Preferred mail transport on Render Free: Brevo HTTPS API
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
 const MAIL_FROM_EMAIL = process.env.MAIL_FROM_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER || '';
-const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'DJ Holland App';
+const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'DJ Holland';
 
 // SMTP fallback (works locally / paid Render, but Render Free blocks common SMTP ports)
 const SMTP_HOST = process.env.SMTP_HOST || '';
@@ -292,6 +292,35 @@ app.post('/api/wishes', async (req, res) => {
   // Keep the latest 500 entries.
   state.wishes = state.wishes.slice(0, 500);
   await saveState();
+
+  // Optional Brevo notification so DJ Holland sees a new wish immediately by email.
+  if (BREVO_API_KEY && MAIL_FROM_EMAIL) {
+    const wishSubject = `Neuer Musikwunsch – ${event} – ${name}`;
+    const wishText = [
+      'Neuer Musikwunsch über die DJ Holland App', '',
+      `Event-Code: ${event}`,
+      `Name: ${name}`,
+      `Song: ${song}`,
+      `Interpret: ${artist}`,
+      `Nachricht: ${message || '-'}`, '',
+      `Gesendet: ${wish.createdAt}`
+    ].join('\n');
+
+    try {
+      await sendViaBrevo({
+        to: BOOKING_TO,
+        subject: wishSubject,
+        text: wishText
+      });
+      wish.mailSent = true;
+      await saveState();
+    } catch (error) {
+      console.error('Wish mail error:', error?.message || error);
+      wish.mailSent = false;
+      await saveState();
+    }
+  }
+
   res.json({ ok: true, message: 'Dein Musikwunsch ist bei DJ Holland angekommen. 🎵' });
 });
 
@@ -438,6 +467,47 @@ app.get('/api/admin/bookings', requireAdmin, (req, res) => {
   res.json({ ok: true, bookings: state.bookings });
 });
 
+
+// ---------------- Music cover helper (public artwork lookup) ----------------
+const musicCoverCache = new Map();
+app.get('/api/music-cover', async (req, res) => {
+  const title = cleanText(req.query?.title, 180);
+  const artist = cleanText(req.query?.artist, 180);
+  if (!title) return res.status(400).json({ ok:false, message:'title missing' });
+  const key = `${title}|${artist}`.toLowerCase();
+  if (musicCoverCache.has(key)) return res.json(musicCoverCache.get(key));
+  try {
+    const term = `${title} ${artist}`.trim();
+    const url = new URL('https://itunes.apple.com/search');
+    url.searchParams.set('term', term);
+    url.searchParams.set('entity', 'song');
+    url.searchParams.set('limit', '8');
+    url.searchParams.set('country', 'DE');
+    const r = await fetch(url, { headers:{'Accept':'application/json'} });
+    const d = await r.json();
+    const norm = v => String(v||'').toLowerCase().replace(/[^a-z0-9äöüß]+/g,' ');
+    const wantTitle = norm(title);
+    const wantArtist = norm(artist);
+    const rows = Array.isArray(d.results) ? d.results : [];
+    const scored = rows.map(x => {
+      const tt=norm(x.trackName), aa=norm(x.artistName);
+      let score=0;
+      if(tt===wantTitle) score+=10; else if(tt.includes(wantTitle)||wantTitle.includes(tt)) score+=6;
+      if(aa.includes('dj holland')) score+=6;
+      if(wantArtist && (wantArtist.includes(aa)||aa.includes(wantArtist))) score+=3;
+      return {x,score};
+    }).sort((a,b)=>b.score-a.score);
+    const hit=scored[0]?.x;
+    const cover=hit?.artworkUrl100 ? hit.artworkUrl100.replace(/100x100bb/, '600x600bb') : '';
+    const payload={ok:true,cover,title:hit?.trackName||title,artist:hit?.artistName||artist};
+    musicCoverCache.set(key,payload);
+    res.set('Cache-Control','public, max-age=86400');
+    res.json(payload);
+  } catch (err) {
+    res.status(200).json({ok:true,cover:''});
+  }
+});
+
 // ---------------- Health ----------------
 app.get('/api/health', (req, res) => {
   res.json({
@@ -455,6 +525,6 @@ app.get('*', (req, res) => {
 
 await loadState();
 app.listen(PORT, () => {
-  console.log(`DJ Holland V19.5 läuft auf Port ${PORT}`);
+  console.log(`DJ Holland V19.7 läuft auf Port ${PORT}`);
   console.log(`Mail transport: ${BREVO_API_KEY && MAIL_FROM_EMAIL ? 'Brevo HTTPS' : (SMTP_HOST ? 'SMTP fallback' : 'not configured')}`);
 });
