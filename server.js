@@ -51,8 +51,9 @@ const adminSessions = new Map();
 const loginAttempts = new Map();
 const bookingAttempts = new Map();
 const wishAttempts = new Map();
+const reviewAttempts = new Map();
 let stateWrite = Promise.resolve();
-let state = { wishes: [], bookings: [] };
+let state = { wishes: [], bookings: [], reviews: [] };
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -67,6 +68,7 @@ async function loadState() {
       if (parsed && typeof parsed === 'object') {
         state.wishes = Array.isArray(parsed.wishes) ? parsed.wishes : [];
         state.bookings = Array.isArray(parsed.bookings) ? parsed.bookings : [];
+        state.reviews = Array.isArray(parsed.reviews) ? parsed.reviews : [];
       }
     }
   } catch (err) {
@@ -351,6 +353,51 @@ app.delete('/api/admin/wishes', requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------- Rezensionen ----------------
+app.post('/api/reviews', async (req, res) => {
+  const ip = clientIp(req);
+  if (rateLimited(reviewAttempts, ip, 3, 24 * 60 * 60 * 1000)) {
+    return res.status(429).json({ ok:false, message:'Bitte später erneut versuchen.' });
+  }
+  if (cleanText(req.body?.website, 200)) return res.json({ ok:true });
+  const name = cleanText(req.body?.name, 80) || 'Anonym';
+  const event = cleanText(req.body?.event, 120);
+  const text = cleanText(req.body?.text, 1200);
+  const rating = Math.max(1, Math.min(5, Number(req.body?.rating || 5)));
+  if (!text || text.length < 8) return res.status(400).json({ ok:false, message:'Bitte eine kurze Rezension schreiben.' });
+  const review = { id:crypto.randomUUID(), name, event, text, rating, status:'pending', createdAt:new Date().toISOString() };
+  state.reviews.unshift(review);
+  state.reviews = state.reviews.slice(0, 300);
+  await saveState();
+  res.json({ ok:true, message:'Danke! Deine Rezension wird von DJ Holland geprüft und danach veröffentlicht.' });
+});
+
+app.get('/api/reviews', (req, res) => {
+  res.set('Cache-Control','no-store');
+  res.json({ ok:true, reviews: state.reviews.filter(r => r.status === 'published').slice(0, 20) });
+});
+
+app.get('/api/admin/reviews', requireAdmin, (req, res) => {
+  res.set('Cache-Control','no-store');
+  res.json({ ok:true, reviews: state.reviews });
+});
+
+app.patch('/api/admin/reviews/:id', requireAdmin, async (req, res) => {
+  const item = state.reviews.find(r => r.id === req.params.id);
+  if (!item) return res.status(404).json({ ok:false, message:'Rezension nicht gefunden.' });
+  if (['pending','published'].includes(req.body?.status)) item.status = req.body.status;
+  await saveState();
+  res.json({ ok:true, review:item });
+});
+
+app.delete('/api/admin/reviews/:id', requireAdmin, async (req, res) => {
+  const before = state.reviews.length;
+  state.reviews = state.reviews.filter(r => r.id !== req.params.id);
+  if (before === state.reviews.length) return res.status(404).json({ ok:false, message:'Rezension nicht gefunden.' });
+  await saveState();
+  res.json({ ok:true });
+});
+
 // ---------------- Booking ----------------
 function smtpMailer() {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
@@ -476,36 +523,29 @@ app.get('/api/music-cover', async (req, res) => {
   if (!title) return res.status(400).json({ ok:false, message:'title missing' });
   const key = `${title}|${artist}`.toLowerCase();
   if (musicCoverCache.has(key)) return res.json(musicCoverCache.get(key));
+  const norm = v => String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  const wantTitle = norm(title), wantArtist = norm(artist);
+  let cover='', hitTitle=title, hitArtist=artist;
   try {
-    const term = `${title} ${artist}`.trim();
-    const url = new URL('https://itunes.apple.com/search');
-    url.searchParams.set('term', term);
-    url.searchParams.set('entity', 'song');
-    url.searchParams.set('limit', '8');
-    url.searchParams.set('country', 'DE');
-    const r = await fetch(url, { headers:{'Accept':'application/json'} });
-    const d = await r.json();
-    const norm = v => String(v||'').toLowerCase().replace(/[^a-z0-9äöüß]+/g,' ');
-    const wantTitle = norm(title);
-    const wantArtist = norm(artist);
-    const rows = Array.isArray(d.results) ? d.results : [];
-    const scored = rows.map(x => {
-      const tt=norm(x.trackName), aa=norm(x.artistName);
-      let score=0;
-      if(tt===wantTitle) score+=10; else if(tt.includes(wantTitle)||wantTitle.includes(tt)) score+=6;
-      if(aa.includes('dj holland')) score+=6;
-      if(wantArtist && (wantArtist.includes(aa)||aa.includes(wantArtist))) score+=3;
-      return {x,score};
-    }).sort((a,b)=>b.score-a.score);
-    const hit=scored[0]?.x;
-    const cover=hit?.artworkUrl100 ? hit.artworkUrl100.replace(/100x100bb/, '600x600bb') : '';
-    const payload={ok:true,cover,title:hit?.trackName||title,artist:hit?.artistName||artist};
-    musicCoverCache.set(key,payload);
-    res.set('Cache-Control','public, max-age=86400');
-    res.json(payload);
-  } catch (err) {
-    res.status(200).json({ok:true,cover:''});
+    const terms = [`${title} ${artist}`, `${title} DJ Holland`, title];
+    for (const term of terms) {
+      const url = new URL('https://itunes.apple.com/search');
+      url.searchParams.set('term', term); url.searchParams.set('entity','song'); url.searchParams.set('limit','20'); url.searchParams.set('country','DE');
+      const r = await fetch(url, {headers:{Accept:'application/json'}}); const d = await r.json();
+      const scored=(Array.isArray(d.results)?d.results:[]).map(x=>{const tt=norm(x.trackName),aa=norm(x.artistName);let score=0;if(tt===wantTitle)score+=15;else if(tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
+      const hit=scored[0]; if(hit?.score>=8 && hit.x?.artworkUrl100){cover=hit.x.artworkUrl100.replace(/100x100bb/,'600x600bb');hitTitle=hit.x.trackName||title;hitArtist=hit.x.artistName||artist;break;}
+    }
+  } catch {}
+  if (!cover) {
+    try {
+      const q=encodeURIComponent(`${title} ${artist}`);
+      const r=await fetch(`https://api.deezer.com/search?q=${q}&limit=15`,{headers:{Accept:'application/json'}}); const d=await r.json();
+      const rows=Array.isArray(d.data)?d.data:[];
+      const scored=rows.map(x=>{const tt=norm(x.title),aa=norm(x.artist?.name);let score=0;if(tt===wantTitle)score+=15;else if(tt.includes(wantTitle)||wantTitle.includes(tt))score+=8;if(aa.includes('dj holland'))score+=8;if(wantArtist&&(wantArtist.includes(aa)||aa.includes(wantArtist)))score+=4;return{x,score};}).sort((a,b)=>b.score-a.score);
+      const hit=scored[0]; if(hit?.score>=7){cover=hit.x.album?.cover_xl||hit.x.album?.cover_big||'';hitTitle=hit.x.title||title;hitArtist=hit.x.artist?.name||artist;}
+    } catch {}
   }
+  const payload={ok:true,cover,title:hitTitle,artist:hitArtist}; musicCoverCache.set(key,payload); res.set('Cache-Control','public, max-age=86400'); res.json(payload);
 });
 
 // ---------------- Health ----------------
@@ -515,7 +555,8 @@ app.get('/api/health', (req, res) => {
     instagramConfigured: Boolean(IG_ACCESS_TOKEN),
     adminConfigured: Boolean(ADMIN_EMAIL && ADMIN_PASSWORD),
     bookingMail: BREVO_API_KEY && MAIL_FROM_EMAIL ? 'brevo' : (SMTP_HOST && SMTP_USER && SMTP_PASS ? 'smtp' : 'not_configured'),
-    wishes: state.wishes.length
+    wishes: state.wishes.length,
+    reviews: state.reviews.length
   });
 });
 
@@ -526,6 +567,6 @@ app.get('*', (req, res) => {
 
 await loadState();
 app.listen(PORT, () => {
-  console.log(`DJ Holland V19.7 läuft auf Port ${PORT}`);
+  console.log(`DJ Holland V20.2 läuft auf Port ${PORT}`);
   console.log(`Mail transport: ${BREVO_API_KEY && MAIL_FROM_EMAIL ? 'Brevo HTTPS' : (SMTP_HOST ? 'SMTP fallback' : 'not configured')}`);
 });
