@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import fsp from 'fs/promises';
 import nodemailer from 'nodemailer';
+import pg from 'pg';
 
 dotenv.config();
 
@@ -14,6 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
+const DATABASE_URL = process.env.DATABASE_URL || '';
+const { Pool } = pg;
 
 // Instagram
 const IG_ACCESS_TOKEN = process.env.IG_ACCESS_TOKEN;
@@ -42,10 +45,30 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || MAIL_FROM_EMAIL || BOOKING_TO;
 
-// Runtime state. On Render Free this file is ephemeral and can be lost on restart/redeploy.
-// The API is designed so the storage layer can later be swapped for Postgres/Redis without changing the frontend.
+// Persistent application state.
+// In production, set DATABASE_URL to a PostgreSQL database (e.g. Render Postgres).
+// If DATABASE_URL is missing, the app falls back to data/state.json for local development only.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'state.json');
+const usingPostgres = Boolean(DATABASE_URL);
+
+function postgresSslConfig() {
+  if (!DATABASE_URL) return false;
+  if (String(process.env.DATABASE_SSL || '').toLowerCase() === 'false') return false;
+  try {
+    const host = new URL(DATABASE_URL).hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return false;
+  } catch {}
+  return { rejectUnauthorized: false };
+}
+
+const db = usingPostgres ? new Pool({
+  connectionString: DATABASE_URL,
+  ssl: postgresSslConfig(),
+  max: Number(process.env.DATABASE_POOL_MAX || 5),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+}) : null;
 
 const adminSessions = new Map();
 const loginAttempts = new Map();
@@ -60,32 +83,77 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true, index: false }));
 
+function normalizeState(parsed) {
+  const next = parsed && typeof parsed === 'object' ? parsed : {};
+  return {
+    wishes: Array.isArray(next.wishes) ? next.wishes : [],
+    bookings: Array.isArray(next.bookings) ? next.bookings : [],
+    reviews: Array.isArray(next.reviews) ? next.reviews : []
+  };
+}
+
+async function readLocalState() {
+  await fsp.mkdir(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DATA_FILE)) return { wishes: [], bookings: [], reviews: [] };
+  return normalizeState(JSON.parse(await fsp.readFile(DATA_FILE, 'utf8')));
+}
+
 async function loadState() {
   try {
-    await fsp.mkdir(DATA_DIR, { recursive: true });
-    if (fs.existsSync(DATA_FILE)) {
-      const parsed = JSON.parse(await fsp.readFile(DATA_FILE, 'utf8'));
-      if (parsed && typeof parsed === 'object') {
-        state.wishes = Array.isArray(parsed.wishes) ? parsed.wishes : [];
-        state.bookings = Array.isArray(parsed.bookings) ? parsed.bookings : [];
-        state.reviews = Array.isArray(parsed.reviews) ? parsed.reviews : [];
-      }
+    if (!usingPostgres) {
+      state = await readLocalState();
+      console.warn('DATABASE_URL fehlt: Daten werden nur lokal in data/state.json gespeichert und sind auf Render nicht dauerhaft.');
+      return;
     }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS djh_app_state (
+        id TEXT PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const result = await db.query('SELECT data FROM djh_app_state WHERE id = $1', ['main']);
+    if (result.rows.length) {
+      state = normalizeState(result.rows[0].data);
+    } else {
+      // One-time migration helper: if an old local state file exists, import it into Postgres.
+      let initial = { wishes: [], bookings: [], reviews: [] };
+      try { initial = await readLocalState(); } catch {}
+      state = normalizeState(initial);
+      await db.query(
+        `INSERT INTO djh_app_state (id, data, updated_at) VALUES ($1, $2::jsonb, NOW())`,
+        ['main', JSON.stringify(state)]
+      );
+    }
+
+    console.log(`Persistent storage: PostgreSQL (${state.reviews.length} reviews, ${state.wishes.length} wishes, ${state.bookings.length} bookings loaded)`);
   } catch (err) {
-    console.error('State load error:', err?.message || err);
+    console.error('PostgreSQL state load error:', err?.message || err);
+    throw err;
   }
 }
 
 function saveState() {
   stateWrite = stateWrite.then(async () => {
-    try {
-      await fsp.mkdir(DATA_DIR, { recursive: true });
-      const tmp = `${DATA_FILE}.tmp`;
-      await fsp.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8');
-      await fsp.rename(tmp, DATA_FILE);
-    } catch (err) {
-      console.error('State save error:', err?.message || err);
+    if (usingPostgres) {
+      await db.query(
+        `INSERT INTO djh_app_state (id, data, updated_at)
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()`,
+        ['main', JSON.stringify(state)]
+      );
+      return;
     }
+
+    await fsp.mkdir(DATA_DIR, { recursive: true });
+    const tmp = `${DATA_FILE}.tmp`;
+    await fsp.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8');
+    await fsp.rename(tmp, DATA_FILE);
+  }).catch(err => {
+    console.error('State save error:', err?.message || err);
+    throw err;
   });
   return stateWrite;
 }
@@ -556,7 +624,9 @@ app.get('/api/health', (req, res) => {
     adminConfigured: Boolean(ADMIN_EMAIL && ADMIN_PASSWORD),
     bookingMail: BREVO_API_KEY && MAIL_FROM_EMAIL ? 'brevo' : (SMTP_HOST && SMTP_USER && SMTP_PASS ? 'smtp' : 'not_configured'),
     wishes: state.wishes.length,
-    reviews: state.reviews.length
+    reviews: state.reviews.length,
+    bookings: state.bookings.length,
+    storage: usingPostgres ? 'postgresql' : 'local_file'
   });
 });
 
@@ -566,7 +636,7 @@ app.get('*', (req, res) => {
 });
 
 await loadState();
-app.listen(PORT, () => {
-  console.log(`DJ Holland V20.2 läuft auf Port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`DJ Holland V21.1 läuft auf Port ${PORT}`);
   console.log(`Mail transport: ${BREVO_API_KEY && MAIL_FROM_EMAIL ? 'Brevo HTTPS' : (SMTP_HOST ? 'SMTP fallback' : 'not configured')}`);
 });

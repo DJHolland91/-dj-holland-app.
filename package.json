@@ -1,6 +1,6 @@
 {
-  "name": "dj-holland-app-v20",
-  "version": "20.0.0",
+  "name": "dj-holland-app-v21-1",
+  "version": "21.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^6.9.16",
+    "pg": "^8.13.1"
   }
 }

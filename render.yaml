@@ -13,3 +13,5 @@ services:
         sync: false
       - key: IG_API_HOST
         value: https://graph.instagram.com
+      - key: DATABASE_URL
+        sync: false
